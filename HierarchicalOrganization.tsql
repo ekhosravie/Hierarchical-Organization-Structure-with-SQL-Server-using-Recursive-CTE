@@ -1,0 +1,170 @@
+--  Hierarchical Organization Structure with SQL Server using Recursive CTE
+
+-- 1. Introduction
+-- Hello everyone! Welcome back to my channel! In today's video, 
+-- we’re going to learn how to visualize and query a hierarchical employee structure 
+-- within a SQL Server database. This is particularly useful for businesses and teams
+--  that want to easily navigate their reporting structures or visualize 
+--  managerial relationships.
+
+
+
+-- 2. Purpose of the Video
+
+-- The purpose of this video is to demonstrate how to organize employees by role in a
+-- hierarchical format, showing their reporting lines from top-level management down
+-- to interns. We’ll walk through the SQL code step-by-step, so you can see how a 
+-- recursive common table expression (CTE) helps build this hierarchy.
+
+-- Problem Statement
+-- Imagine a company database where we have information about employees 
+-- across multiple departments. Each employee has a designated role, like 
+-- Senior Manager, Manager,Deputy Manager, Employee, or Intern, and reports 
+-- to someone above them.The challenge is to structure this data to display 
+-- each employee’s reporting line,giving us a clear view of the 
+-- entire organization.
+
+
+-- Solution Overview
+-- To solve this problem, we’ll use a recursive CTE in SQL Server. 
+-- This technique allows us to retrieve hierarchical data by repeatedly 
+--joining a tab to itself, which helps in building relationships between managers
+-- and their subordinates.Let’s dive into the code and see how this is done.
+
+-- Step 1: Table Setup
+
+-- First, we set up an Employees table with columns for EmployeeID, EmployeeName, 
+--Department, Role, and ManagerID. Notice the ManagerID column.
+--  It’s a self-referencing foreign key that links to the EmployeeID of the 
+--employee’s manager.
+
+CREATE TABLE Employees (
+    EmployeeID INT PRIMARY KEY,
+    EmployeeName NVARCHAR(50),
+    Department NVARCHAR(50),
+    Role NVARCHAR(20),
+    ManagerID INT NULL -- Self-reference to the manager's EmployeeID
+);
+
+
+-- Step 2: Insert Sample Data
+-- Let’s populate the Employees table with sample data. Here, we’ve added employees 
+--across five departments: 
+-- Sales, HR, IT, Marketing, and Finance. Each department has a full hierarchy,
+-- from Senior Manager to Intern,
+--  with specific reporting relationships defined by the ManagerID column.
+
+INSERT INTO Employees (EmployeeID, EmployeeName, Department, Role, ManagerID)
+VALUES
+    -- Sales Department
+    (1, 'John Doe', 'Sales', 'Senior Manager', NULL),
+    (2, 'Jane Smith', 'Sales', 'Manager', 1),
+    (3, 'Emily Jones', 'Sales', 'Deputy Manager', 2),
+    (4, 'Michael Brown', 'Sales', 'Employee', 3),
+    (5, 'Alice Green', 'Sales', 'Intern', 4),
+    (6, 'Tom Gray', 'Sales', 'Employee', 3),
+    (7, 'Nina Patel', 'Sales', 'Intern', 4),
+
+    -- HR Department
+    (8, 'Chris White', 'HR', 'Senior Manager', NULL),
+    (9, 'Patricia Miller', 'HR', 'Manager', 8),
+    (10, 'Robert Wilson', 'HR', 'Deputy Manager', 9),
+    (11, 'Mary Clark', 'HR', 'Employee', 10),
+    (12, 'James Lewis', 'HR', 'Intern', 11),
+    (13, 'Sophia Roberts', 'HR', 'Employee', 10),
+    (14, 'Alex Carter', 'HR', 'Intern', 11),
+
+    -- IT Department
+    (15, 'Linda Hall', 'IT', 'Senior Manager', NULL),
+    (16, 'David Young', 'IT', 'Manager', 15),
+    (17, 'Daniel King', 'IT', 'Deputy Manager', 16),
+    (18, 'Sarah Baker', 'IT', 'Employee', 17),
+    (19, 'Nancy Perez', 'IT', 'Intern', 18),
+    (20, 'Kevin Diaz', 'IT', 'Employee', 17),
+    (21, 'Laura Evans', 'IT', 'Intern', 18),
+
+    -- Marketing Department
+    (22, 'Alice King', 'Marketing', 'Senior Manager', NULL),
+    (23, 'Victor Gomez', 'Marketing', 'Manager', 22),
+    (24, 'Carlos Silva', 'Marketing', 'Deputy Manager', 23),
+    (25, 'Rebecca Lee', 'Marketing', 'Employee', 24),
+    (26, 'Samuel Khan', 'Marketing', 'Intern', 25),
+    (27, 'Sandra Gomez', 'Marketing', 'Employee', 24),
+    (28, 'Ben Torres', 'Marketing', 'Intern', 25),
+
+    -- Finance Department
+    (29, 'William Turner', 'Finance', 'Senior Manager', NULL),
+    (30, 'Jessica Johnson', 'Finance', 'Manager', 29),
+    (31, 'Olivia Thomas', 'Finance', 'Deputy Manager', 30),
+    (32, 'George Lopez', 'Finance', 'Employee', 31),
+    (33, 'Emma Hill', 'Finance', 'Intern', 32),
+    (34, 'Liam Scott', 'Finance', 'Employee', 31),
+    (35, 'Evelyn Walker', 'Finance', 'Intern', 32);
+
+-- Step 3: Creating the Recursive CTE
+
+-- Next, we create our recursive common table expression, EmployeeHierarchy.
+-- This is the core of our solution. The CTE has two parts: the anchor member
+--  and the recursive member.
+
+WITH EmployeeHierarchy AS (
+-- Anchor Member: "The anchor member retrieves employees who don’t have a manager,
+-- such as Senior Managers. Here, we initialize the HierarchyPath with the employee's
+-- name and set the Level to 1."
+
+    SELECT 
+        EmployeeID,
+        EmployeeName,
+        Role,
+        Department,
+        ManagerID,
+        CAST(EmployeeName AS NVARCHAR(MAX)) AS HierarchyPath,
+        1 AS Level
+    FROM 
+        Employees
+    WHERE 
+        ManagerID IS NULL
+    
+    UNION ALL
+    
+-- Recursive Member: "The recursive member joins each employee to their manager by
+-- linking ManagerID to the EmployeeID of the previous level. We build the 
+-- HierarchyPath by appending the employee’s name to the manager’s path and 
+-- incrementing the level. This process continues recursively until all reporting
+-- lines are included in the hierarchy.
+
+    SELECT 
+        E.EmployeeID,
+        E.EmployeeName,
+        E.Role,
+        E.Department,
+        E.ManagerID,
+        CAST(EH.HierarchyPath + ' -> ' + E.EmployeeName AS NVARCHAR(MAX)) 
+        AS HierarchyPath,
+        
+        EH.Level + 1 AS Level
+    FROM 
+        Employees E
+    INNER JOIN 
+        EmployeeHierarchy EH ON E.ManagerID = EH.EmployeeID
+)
+
+-- Step 4: Displaying the Final Hierarchical View
+
+SELECT 
+    Department,
+    REPLICATE('   ', Level - 1) + EmployeeName AS HierarchicalEmployeeName,  
+    -- Indent based on level
+    Role,
+    HierarchyPath
+FROM 
+    EmployeeHierarchy
+ORDER BY 
+    Department, 
+    Level, 
+    EmployeeID;
+
+--"Finally, we select from our EmployeeHierarchy CTE. We add indentation to 
+--the EmployeeName based on their Level to visually represent the hierarchy. 
+--This way, each subordinate is indented under their respective manager. 
+--Sorting by Department and Level makes the hierarchy clear for each department."
